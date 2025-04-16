@@ -237,7 +237,7 @@ public class TagReader {
         return data
     }
     
-    func selectPassportApplication() async throws -> ResponseAPDU {
+    public func selectPassportApplication() async throws -> ResponseAPDU {
         // Finally reselect the eMRTD application so the rest of the reading works as normal
         Logger.tagReader.debug( "Re-selecting eMRTD Application" )
         let cmd : NFCISO7816APDU = NFCISO7816APDU(instructionClass: 0x00, instructionCode: 0xA4, p1Parameter: 0x04, p2Parameter: 0x0C, data: Data([0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01]), expectedResponseLength: -1)
