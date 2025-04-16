@@ -217,7 +217,7 @@ public class TagReader {
     }
 
 
-    func readCardAccess() async throws -> [UInt8]{
+    public func readCardAccess() async throws -> [UInt8]{
         // Info provided by @smulu
         // By default NFCISO7816Tag requirers a list of ISO/IEC 7816 applets (AIDs). Upon discovery of NFC tag the first found applet from this list is automatically selected (and you have no way of changing this).
         // This is a problem for PACE protocol becaues it requires reading parameters from file EF.CardAccess which lies outside of eMRTD applet (AID: A0000002471001) in the master file.
