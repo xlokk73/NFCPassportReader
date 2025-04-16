@@ -1,11 +1,3 @@
-//
-//  MainView.swift
-//  NFCPassportReaderApp
-//
-//  Created by Andy Qua on 04/06/2019.
-//  Copyright © 2019 Andy Qua. All rights reserved.
-//
-
 import SwiftUI
 import OSLog
 import Combine
@@ -34,7 +26,11 @@ struct MainView : View {
     
     @State var bgColor = Color( UIColor.systemBackground )
     
+    // Regular passport reader for normal operations
     private let passportReader = PassportReader()
+    
+    // PACE passport reader specifically for PACE authentication
+    private let paceReader = PACEPassportReader()
 
     var body: some View {
         NavigationView {
@@ -195,33 +191,39 @@ extension MainView {
                 }
             }
             
+            // Set the tracking delegate if necessary
+            // paceReader.trackingDelegate = self
+            
+            // Override data amount to read if needed (same as with regular PassportReader)
+            if useExtendedMode {
+                paceReader.overrideNFCDataAmountToRead(amount: 256)
+            }
+            
             do {
-                // Use the existing passportReader but focus only on PACE
-                let passport = try await passportReader.readPassport(
+                // Use PACEPassportReader to get a TagReader with PACE session
+                let tagReader = try await paceReader.authenticateWithPACE(
                     mrzKey: mrzKey,
-                    tags: [], // Empty array - we'll only read minimal data
-                    skipSecureElements: true,
-                    skipCA: true,
-                    skipPACE: false, // Don't skip PACE - we want to perform it
-                    useExtendedMode: useExtendedMode,
                     customDisplayMessage: customMessageHandler
                 )
                 
-                // Check if PACE authentication was successful
-                if passport.PACEStatus == .success {
-                    // PACE authentication successful
-                    self.alertTitle = "Success"
-                    self.alertMessage = "PACE authentication successful"
-                } else {
-                    // PACE authentication failed or not supported
-                    self.alertTitle = "Failed"
-                    self.alertMessage = "PACE authentication failed or not supported"
-                }
+                // PACE authentication successful - now we have an authenticated TagReader
+                self.alertTitle = "PACE Successful"
+                self.alertMessage = "PACE authentication was successful. You now have an authenticated TagReader that can be used to read passport data."
                 self.showingAlert = true
                 
+                // Example: You can now use the tagReader to read data, e.g.:
+                // let dg1Data = try await tagReader.readDataGroup(dataGroup: .DG1)
+                // let dg1 = try DataGroupParser().parseDG(data: dg1Data)
+                
+            } catch let error as NFCPassportReaderError {
+                // Handle specific NFCPassportReaderError errors
+                self.alertTitle = "PACE Authentication Failed"
+                self.alertMessage = "Error: \(error.localizedDescription)"
+                self.showingAlert = true
             } catch {
+                // Handle other errors
                 self.alertTitle = "Error"
-                self.alertMessage = error.localizedDescription
+                self.alertMessage = "Unexpected error: \(error.localizedDescription)"
                 self.showingAlert = true
             }
         }
@@ -246,6 +248,3 @@ struct ContentView_Previews : PreviewProvider {
     }
 }
 #endif
-
-
-
