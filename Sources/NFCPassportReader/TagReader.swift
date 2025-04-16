@@ -20,7 +20,7 @@ public class TagReader {
 
     var progress : ((Int)->())?
 
-    init( tag: NFCISO7816Tag ) {
+    public init( tag: NFCISO7816Tag ) {
         self.tag = tag
     }
     
@@ -165,7 +165,7 @@ public class TagReader {
     }
     
 
-    func selectFileAndRead( tag: [UInt8]) async throws -> [UInt8] {
+    public func selectFileAndRead( tag: [UInt8]) async throws -> [UInt8] {
         var resp = try await selectFile(tag: tag )
             
         // Read first 4 bytes of header to see how big the data structure is
@@ -246,7 +246,7 @@ public class TagReader {
         return response
     }
     
-    func selectFile( tag: [UInt8] ) async throws -> ResponseAPDU {
+    public func selectFile( tag: [UInt8] ) async throws -> ResponseAPDU {
         
         let data : [UInt8] = [0x00, 0xA4, 0x02, 0x0C, 0x02] + tag
         let cmd = NFCISO7816APDU(data:Data(data))!
