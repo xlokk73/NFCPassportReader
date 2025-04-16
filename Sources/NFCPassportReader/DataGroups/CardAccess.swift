@@ -23,7 +23,7 @@ public class CardAccess {
         }
     }
     
-    required init( _ data : [UInt8] ) throws {
+    public required init( _ data : [UInt8] ) throws {
         let p = SimpleASN1DumpParser()
         asn1 = try p.parse(data: Data(data))
         
