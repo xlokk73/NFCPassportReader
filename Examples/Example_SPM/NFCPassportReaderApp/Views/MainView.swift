@@ -164,7 +164,7 @@ extension MainView {
         }
     }
 
-    func scanPassport( ) {
+    func scanPassport() {
         lastPassportScanTime = Date.now
 
         hideKeyboard()
@@ -180,26 +180,15 @@ extension MainView {
         let useExtendedMode = settings.useExtendedMode
 
         let passportUtils = PassportUtils()
-        let mrzKey = passportUtils.getMRZKey( passportNumber: pptNr, dateOfBirth: dob, dateOfExpiry: doe)
-
-        // Set the masterListURL on the Passport Reader to allow auto passport verification
-        let masterListURL = Bundle.main.url(forResource: "masterList", withExtension: ".pem")!
-        passportReader.setMasterListURL( masterListURL )
+        let mrzKey = passportUtils.getMRZKey(passportNumber: pptNr, dateOfBirth: dob, dateOfExpiry: doe)
         
-        // Set whether to use the new Passive Authentication verification method (default true) or the old OpenSSL CMS verifiction
-        passportReader.passiveAuthenticationUsesOpenSSL = !settings.useNewVerificationMethod
-        
-        // If we want to read only specific data groups we can using:
-//        let dataGroups : [DataGroupId] = [.COM, .SOD, .DG1, .DG2, .DG7, .DG11, .DG12, .DG14, .DG15]
-//        passportReader.readPassport(mrzKey: mrzKey, tags:dataGroups, completed: { (passport, error) in
-        
-        appLogging.error( "Using version \(UIApplication.version)" )
+        appLogging.error("Using version \(UIApplication.version)")
         
         Task {
-            let customMessageHandler : (NFCViewDisplayMessage)->String? = { (displayMessage) in
+            let customMessageHandler: (NFCViewDisplayMessage) -> String? = { (displayMessage) in
                 switch displayMessage {
                     case .requestPresentPassport:
-                        return "Hold your iPhone near an NFC enabled passport."
+                        return "Hold your iPhone near an NFC enabled passport for PACE authentication."
                     default:
                         // Return nil for all other messages so we use the provided default
                         return nil
@@ -207,32 +196,33 @@ extension MainView {
             }
             
             do {
-                let passport = try await passportReader.readPassport( mrzKey: mrzKey, useExtendedMode: useExtendedMode,  customDisplayMessage:customMessageHandler)
+                // Use the existing passportReader but focus only on PACE
+                let passport = try await passportReader.readPassport(
+                    mrzKey: mrzKey,
+                    tags: [], // Empty array - we'll only read minimal data
+                    skipSecureElements: true,
+                    skipCA: true,
+                    skipPACE: false, // Don't skip PACE - we want to perform it
+                    useExtendedMode: useExtendedMode,
+                    customDisplayMessage: customMessageHandler
+                )
                 
-                if let _ = passport.faceImageInfo {
-                    print( "Got face Image details")
+                // Check if PACE authentication was successful
+                if passport.PACEStatus == .success {
+                    // PACE authentication successful
+                    self.alertTitle = "Success"
+                    self.alertMessage = "PACE authentication successful"
+                } else {
+                    // PACE authentication failed or not supported
+                    self.alertTitle = "Failed"
+                    self.alertMessage = "PACE authentication failed or not supported"
                 }
-                
-                if settings.savePassportOnScan {
-                    // Save passport
-                    let dict = passport.dumpPassportData(selectedDataGroups: DataGroupId.allCases, includeActiveAuthenticationData: true)
-                    if let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) {
-                        
-                        let savedPath = FileManager.cachesFolder.appendingPathComponent("\(passport.documentNumber).json")
-                        
-                        try? data.write(to: savedPath, options: .completeFileProtection)
-                    }
-                }
-                
-                DispatchQueue.main.async {
-                    self.settings.passport = passport
-                    self.showDetails = true
-                }
-            } catch {
-                self.alertTitle = "Oops"
-                self.alertTitle = error.localizedDescription
                 self.showingAlert = true
-
+                
+            } catch {
+                self.alertTitle = "Error"
+                self.alertMessage = error.localizedDescription
+                self.showingAlert = true
             }
         }
     }
