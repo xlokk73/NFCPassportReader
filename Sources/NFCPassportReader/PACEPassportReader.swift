@@ -28,6 +28,9 @@ public class PACEPassportReader : NSObject {
     private var nfcViewDisplayMessageHandler: ((NFCViewDisplayMessage) -> String?)?
     private var shouldNotReportNextReaderSessionInvalidationErrorUserCanceled : Bool = false
     
+    // Flag to control whether the session should be kept open after authentication
+    private var keepSessionActive: Bool = true
+    
     public init(dataAmountToReadOverride: Int? = nil) {
         super.init()
         self.dataAmountToReadOverride = dataAmountToReadOverride
@@ -41,17 +44,25 @@ public class PACEPassportReader : NSObject {
         dataAmountToReadOverride = amount
     }
     
+    /// Set whether to keep the NFC session active after PACE authentication
+    /// - Parameter keep: true to keep session active, false to invalidate after authentication
+    public func setKeepSessionActive(_ keep: Bool) {
+        keepSessionActive = keep
+    }
+    
     /// Performs PACE authentication and returns a TagReader with an established PACE session
     /// - Parameters:
     ///   - mrzKey: The MRZ key to use for PACE authentication
     ///   - customDisplayMessage: Optional handler for customizing NFC display messages
+    ///   - keepSessionActive: Whether to keep the NFC session active after authentication
     /// - Returns: A TagReader with an established PACE session
     /// - Throws: NFCPassportReaderError if any errors occur during the PACE process
-    public func authenticateWithPACE(mrzKey: String, customDisplayMessage: ((NFCViewDisplayMessage) -> String?)? = nil) async throws -> TagReader {
+    public func authenticateWithPACE(mrzKey: String, customDisplayMessage: ((NFCViewDisplayMessage) -> String?)? = nil, keepSessionActive: Bool = true) async throws -> TagReader {
         
         self.passport = NFCPassportModel()
         self.mrzKey = mrzKey
         self.nfcViewDisplayMessageHandler = customDisplayMessage
+        self.keepSessionActive = keepSessionActive
         
         guard NFCNDEFReaderSession.readingAvailable else {
             throw NFCPassportReaderError.NFCNotSupported
@@ -116,6 +127,15 @@ public class PACEPassportReader : NSObject {
         
         // Re-select passport application after PACE
         _ = try await tagReader.selectPassportApplication()
+        
+        // Only show success message if we're keeping the session active
+        if keepSessionActive {
+            self.updateReaderSessionMessage(alertMessage: NFCViewDisplayMessage.successfulRead)
+        } else {
+            // If not keeping session active, invalidate it now
+            self.shouldNotReportNextReaderSessionInvalidationErrorUserCanceled = true
+            self.readerSession?.invalidate()
+        }
         
         return tagReader
     }
@@ -192,10 +212,11 @@ extension PACEPassportReader : NFCTagReaderSessionDelegate {
                 
                 let authenticatedTagReader = try await self.performPACEAuthentication(with: passportTag)
                 
-                // Successfully authenticated with PACE
-                self.updateReaderSessionMessage(alertMessage: NFCViewDisplayMessage.successfulRead)
-                self.shouldNotReportNextReaderSessionInvalidationErrorUserCanceled = true
-                self.readerSession?.invalidate()
+                // IMPORTANT: Don't invalidate session if we want to keep it active for additional commands
+                if !self.keepSessionActive {
+                    self.shouldNotReportNextReaderSessionInvalidationErrorUserCanceled = true
+                    self.readerSession?.invalidate()
+                }
                 
                 paceContinuation?.resume(returning: authenticatedTagReader)
                 paceContinuation = nil

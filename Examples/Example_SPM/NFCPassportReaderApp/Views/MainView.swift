@@ -31,6 +31,9 @@ struct MainView : View {
     
     // PACE passport reader specifically for PACE authentication
     private let paceReader = PACEPassportReader()
+    
+    // Keep track of the authenticated TagReader for future use
+    @State private var authenticatedTagReader: TagReader?
 
     var body: some View {
         NavigationView {
@@ -201,15 +204,39 @@ extension MainView {
             
             do {
                 // Use PACEPassportReader to get a TagReader with PACE session
+                // Ensure we keep the session active for additional commands
                 let tagReader = try await paceReader.authenticateWithPACE(
                     mrzKey: mrzKey,
-                    customDisplayMessage: customMessageHandler
+                    customDisplayMessage: customMessageHandler,
+                    keepSessionActive: true  // This is crucial - keep the session active
                 )
+                
+                // Store the TagReader for later use if needed
+                self.authenticatedTagReader = tagReader
                 
                 // PACE authentication successful - now we have an authenticated TagReader
                 self.alertTitle = "PACE Successful"
-                self.alertMessage = "PACE authentication was successful. You now have an authenticated TagReader that can be used to read passport data."
+                self.alertMessage = "PACE authentication was successful. Now selecting master file..."
                 self.showingAlert = true
+                
+                // Example: Use the authenticated TagReader to select the master file
+                do {
+                    let response = try await APDUCommands.selectMasterFile(tagReader: tagReader)
+                    
+                    // Check if command was successful (SW1=0x90, SW2=0x00)
+                    if response.sw1 == 0x90 && response.sw2 == 0x00 {
+                        self.alertTitle = "Master File Selected"
+                        self.alertMessage = "Successfully selected the master file after PACE authentication."
+                    } else {
+                        self.alertTitle = "Selection Failed"
+                        self.alertMessage = "Failed to select master file. SW1: \(String(format: "0x%02X", response.sw1)), SW2: \(String(format: "0x%02X", response.sw2))"
+                    }
+                    self.showingAlert = true
+                } catch {
+                    self.alertTitle = "APDU Command Failed"
+                    self.alertMessage = "Error sending APDU command: \(error.localizedDescription)"
+                    self.showingAlert = true
+                }
                 
                 // Example: You can now use the tagReader to read data, e.g.:
                 // let dg1Data = try await tagReader.readDataGroup(dataGroup: .DG1)
